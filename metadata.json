@@ -1,0 +1,6 @@
+{
+  "name": "EcoRoute AI",
+  "description": "An AI-powered multi-objective routing and emissions optimization dashboard for green public transit.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
