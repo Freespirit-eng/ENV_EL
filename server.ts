@@ -432,9 +432,12 @@ async function startServer() {
     });
   } else {
     // Serve production static assets
-    app.use(express.static(path.resolve(__dirname, 'dist')));
+    const distPath = path.resolve(__dirname, 'dist');
+    const finalDistPath = fs.existsSync(distPath) ? distPath : __dirname;
+    
+    app.use(express.static(finalDistPath));
     app.get('*', (req, res) => {
-      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+      res.sendFile(path.resolve(finalDistPath, 'index.html'));
     });
   }
 
