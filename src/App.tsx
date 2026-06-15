@@ -29,62 +29,32 @@ const API_KEY =
 const hasValidKey = Boolean(API_KEY) && API_KEY !== 'YOUR_API_KEY' && API_KEY !== 'MY_GOOGLE_MAPS_PLATFORM_KEY' && API_KEY !== '';
 
 // Custom Polyline Drawer using Google Maps direct API
-interface PolylineProps {
-  path: google.maps.LatLngLiteral[];
-  strokeColor?: string;
-  strokeOpacity?: number;
-  strokeWeight?: number;
-  dashed?: boolean;
-}
-
-function CustomPolyline({ path, strokeColor = '#10B981', strokeOpacity = 0.8, strokeWeight = 5, dashed = false }: PolylineProps) {
+function RouteLine({ path, color, zIndex }: { path: google.maps.LatLngLiteral[], color: string, zIndex: number }) {
   const map = useMap();
   const polylineRef = useRef<google.maps.Polyline | null>(null);
 
   useEffect(() => {
     if (!map || path.length === 0) return;
 
-    // Remove any stale polyline
     if (polylineRef.current) {
       polylineRef.current.setMap(null);
     }
 
-    const options: google.maps.PolylineOptions = {
+    polylineRef.current = new google.maps.Polyline({
       path,
-      strokeColor,
-      strokeOpacity,
-      strokeWeight,
-    };
-
-    if (dashed) {
-      options.strokeOpacity = 0;
-      options.icons = [{
-        icon: {
-          path: 'M 0,-1 0,1',
-          strokeOpacity: strokeOpacity,
-          scale: 3,
-          strokeColor,
-          strokeWeight
-        },
-        offset: '0',
-        repeat: '20px'
-      }];
-    }
-
-    polylineRef.current = new google.maps.Polyline(options);
-    polylineRef.current.setMap(map);
-
-    // Fit map bounds to encompass the optimized route comparison
-    const bounds = new google.maps.LatLngBounds();
-    path.forEach(coord => bounds.extend(coord));
-    map.fitBounds(bounds, { top: 60, bottom: 60, left: 60, right: 60 });
+      strokeColor: color,
+      strokeOpacity: 0.8,
+      strokeWeight: 6,
+      zIndex,
+      map
+    });
 
     return () => {
       if (polylineRef.current) {
         polylineRef.current.setMap(null);
       }
     };
-  }, [map, path, strokeColor, strokeOpacity, strokeWeight, dashed]);
+  }, [map, path, color, zIndex]);
 
   return null;
 }
@@ -116,6 +86,26 @@ const PRESETS = [
     destination: 'ITPL Campus Whitefield',
   }
 ];
+
+function RouteFitter({ optimizationData }: { optimizationData: any }) {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (map && optimizationData?.coordinates) {
+      const standardPath = optimizationData.coordinates.standard || [];
+      const ecoPath = optimizationData.coordinates.eco || [];
+      
+      if (standardPath.length > 0 || ecoPath.length > 0) {
+        const bounds = new google.maps.LatLngBounds();
+        standardPath.forEach((coord: any) => bounds.extend(coord));
+        ecoPath.forEach((coord: any) => bounds.extend(coord));
+        map.fitBounds(bounds, { top: 60, bottom: 60, left: 60, right: 60 });
+      }
+    }
+  }, [map, optimizationData]);
+
+  return null;
+}
 
 export default function App() {
   // Configured inputs
@@ -697,25 +687,22 @@ export default function App() {
                 gestureHandling="cooperative"
                 disableDefaultUI={false}
               >
+                <RouteFitter optimizationData={optimizationData} />
                 
                 {/* Fallback route indicators drawn if optimization records are loaded */}
                 {activeTab === 'routing' && (activeRouteView === 'both' || activeRouteView === 'standard') && standardPath.length > 0 && (
-                  <CustomPolyline 
+                  <RouteLine 
                     path={standardPath} 
-                    strokeColor="#F43F5E" // Slate Red for congestion segment
-                    strokeWeight={4}
-                    dashed={true}
-                    strokeOpacity={0.65}
+                    color="#ef4444" 
+                    zIndex={10}
                   />
                 )}
 
                 {activeTab === 'routing' && (activeRouteView === 'both' || activeRouteView === 'eco') && ecoPath.length > 0 && (
-                  <CustomPolyline 
+                  <RouteLine 
                     path={ecoPath} 
-                    strokeColor="#059669" // Emerald Green for eco wavelength Segment
-                    strokeWeight={6}
-                    dashed={false}
-                    strokeOpacity={0.9}
+                    color="#10b981" 
+                    zIndex={20}
                   />
                 )}
 

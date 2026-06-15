@@ -15,12 +15,13 @@ app.use(express.json());
 
 // Initialize Gemini
 const apiKey = process.env.GEMINI_API_KEY || '';
-const hasGeminiKey = Boolean(apiKey) && apiKey !== 'MY_GEMINI_API_KEY';
+const hasGeminiKey = Boolean(apiKey) && apiKey !== 'MY_GEMINI_API_KEY' && apiKey !== 'your_gemini_api_key_here' && apiKey !== 'YOUR_GEMINI_API_KEY_HERE';
 
 const ai = hasGeminiKey 
   ? new GoogleGenAI({
       apiKey,
       httpOptions: {
+        timeout: 120000,
         headers: {
           'User-Agent': 'aistudio-build',
         }
@@ -82,11 +83,7 @@ const routeCoordinates: Record<string, { lat: number; lng: number }[]> = {
 };
 
 // Simulated base coordinates for custom user optimizations
-function createSimulatedDivergentPaths(org: string, dest: string, weather: string, tempCelsius: number, vehicleType: string, congestion: string) {
-  // Extract simple center coordinates
-  const lat1 = 12.9716;
-  const lng1 = 77.5946; // Bengaluru center
-  
+function createSimulatedDivergentPaths(org: string, dest: string, weather: string, tempCelsius: number, vehicleType: string, congestion: string, startLat: number, startLng: number, endLat: number, endLng: number) {
   const standard: { lat: number; lng: number }[] = [];
   const eco: { lat: number; lng: number }[] = [];
   const stepsCount = 6;
@@ -96,9 +93,9 @@ function createSimulatedDivergentPaths(org: string, dest: string, weather: strin
   for (let i = 0; i < stepsCount; i++) {
     const t = i / (stepsCount - 1);
     
-    // Base straight line
-    const baseLat = lat1 - 0.05 + t * 0.1;
-    const baseLng = lng1 - 0.05 + t * 0.1;
+    // Linear interpolation between start and end
+    const baseLat = startLat + t * (endLat - startLat);
+    const baseLng = startLng + t * (endLng - startLng);
     
     // Add jitter/bottleneck deviation to standard
     const stdDeviationLat = Math.sin(t * Math.PI) * 0.015;
@@ -186,8 +183,32 @@ app.post('/api/optimize', async (req, res) => {
     congestionLevel = 'Heavy' 
   } = req.body;
 
+  let startLat = 12.9716, startLng = 77.5946;
+  let endLat = 12.9716, endLng = 77.5946;
+  
+  const mapsKey = process.env.MAPS_PLATFORM_KEY || process.env.GOOGLE_MAPS_PLATFORM_KEY;
+  if (mapsKey) {
+    try {
+      const orgRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(origin)}&key=${mapsKey}`);
+      const orgData = await orgRes.json();
+      if (orgData.results && orgData.results.length > 0) {
+        startLat = orgData.results[0].geometry.location.lat;
+        startLng = orgData.results[0].geometry.location.lng;
+      }
+      
+      const destRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(destination)}&key=${mapsKey}`);
+      const destData = await destRes.json();
+      if (destData.results && destData.results.length > 0) {
+        endLat = destData.results[0].geometry.location.lat;
+        endLng = destData.results[0].geometry.location.lng;
+      }
+    } catch (error) {
+      console.error('Geocoding fetch failed, falling back to Bengaluru defaults:', error);
+    }
+  }
+
   // Let's retrieve realistic coordinates for this scenario
-  const defaults = createSimulatedDivergentPaths(origin, destination, weather, tempCelsius, vehicleType, congestionLevel);
+  const defaults = createSimulatedDivergentPaths(origin, destination, weather, tempCelsius, vehicleType, congestionLevel, startLat, startLng, endLat, endLng);
 
   if (!hasGeminiKey || !ai) {
     // Elegant fallback simulated data in case the key is missing from AI secrets during staging
@@ -246,7 +267,7 @@ Format your expert recommendation strictly as a valid JSON object matching the f
 }`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
+      model: 'gemini-2.5-flash',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
@@ -311,6 +332,7 @@ Format your expert recommendation strictly as a valid JSON object matching the f
     });
   } catch (error: any) {
     console.warn('Gemini optimization API failed, using high-fidelity fallback:', error.message);
+    console.warn("If this is a fetch failed error, try restarting your server using: NODE_OPTIONS='--dns-result-order=ipv4first' npm run dev");
     return res.json({
       ...defaults.simulatedResponse,
       fromAI: false,
