@@ -577,9 +577,9 @@ async function startServer() {
     });
   }
 
-  const port = 3000;
-  app.listen(port, '0.0.0.0', () => {
-    console.log(`[EcoRoute AI] Express Full-stack Server listening on http://localhost:${port}`);
+  const port = process.env.PORT || 3000;
+  app.listen(port as number, '0.0.0.0', () => {
+    console.log(`[EcoRoute AI] Express Full-stack Server listening on port ${port}`);
   });
 }
 
